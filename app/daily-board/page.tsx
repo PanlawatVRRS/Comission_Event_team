@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase, Employee } from '@/lib/supabase'
 import * as XLSX from 'xlsx'
+import DailyBoardReconcileModal from '@/components/DailyBoardReconcileModal'
 import {
   Layers,
   RefreshCw,
@@ -16,7 +17,6 @@ import {
   Edit2,
   Check,
   UserCheck,
-  Loader2,
   CheckCircle2,
   AlertCircle,
   CheckSquare,
@@ -73,8 +73,7 @@ export default function DailyBoardPage() {
   const [selectedDate, setSelectedDate] = useState(
     new Date().toISOString().split('T')[0]
   )
-  const [boardExcelFile, setBoardExcelFile] = useState<File | null>(null)
-  const [importingBoard, setImportingBoard] = useState(false)
+  const [isReconcileModalOpen, setIsReconcileModalOpen] = useState(false)
   const [statusMessage, setStatusMessage] = useState<{
     type: 'success' | 'error' | null
     message: string
@@ -140,11 +139,12 @@ export default function DailyBoardPage() {
     }
   }, [rawInviteData])
 
-  const handleImportExcelToCreateBoard = async () => {
-    if (!boardExcelFile || !selectedDate) return
-
-    setImportingBoard(true)
-    setStatusMessage({ type: null, message: '' })
+  const handleReconcileConfirm = async (
+    boardExcelFile: File,
+    selectedImportUserIds: string[],
+    importKpiTargets: Record<string, number>
+  ): Promise<string | null> => {
+    if (!selectedDate) return 'กรุณาเลือกวันที่ต้องการสร้างบอร์ด'
 
     try {
       const dataBuffer = await boardExcelFile.arrayBuffer()
@@ -173,7 +173,10 @@ export default function DailyBoardPage() {
 
         if (recommenderVal !== undefined && recommenderVal !== null) {
           const recStr = String(recommenderVal).trim()
-          const targetStr = recommendedVal !== undefined && recommendedVal !== null ? String(recommendedVal).trim() : ''
+          const targetStr =
+            recommendedVal !== undefined && recommendedVal !== null
+              ? String(recommendedVal).trim()
+              : ''
           const timeStr = String(timeVal).trim()
 
           if (recStr && recStr !== 'undefined' && recStr !== 'null') {
@@ -190,18 +193,30 @@ export default function DailyBoardPage() {
       setEKycCounts(userCounts)
       setRawInviteData(inviteDataList)
 
+      if (selectedImportUserIds.length === 0) {
+        throw new Error('กรุณาเลือก User ที่ต้องการกระทบยอด')
+      }
+
+      const selectedEmployees = employeesList.filter((emp) =>
+        selectedImportUserIds.includes(String(emp.id))
+      )
+
       const recordsToInsert: Omit<KPIRecord, 'id'>[] = []
 
-      employeesList.forEach((emp) => {
+      selectedEmployees.forEach((emp) => {
         const uNum = String(emp.user_number || '').trim()
         const matchedKpiCount = userCounts[uNum] || 0
+        const target = Math.max(
+          0,
+          Number(importKpiTargets[String(emp.id)] ?? 35) || 0
+        )
 
         if (matchedKpiCount > 0) {
           recordsToInsert.push({
             record_date: selectedDate,
             staff_name: emp.full_name,
             kpi_achieved: matchedKpiCount,
-            kpi_target: 35,
+            kpi_target: target,
             pending_ekyc: 0,
             has_kpi: true,
           })
@@ -225,15 +240,10 @@ export default function DailyBoardPage() {
         message: `สร้างบอร์ดประจำวันที่ ${selectedDate} สำเร็จ! นำเข้าข้อมูล Recommender และ Creation Time เรียบร้อย (${recordsToInsert.length} คน)`,
       })
 
-      setBoardExcelFile(null)
       fetchRecords()
+      return null
     } catch (err: any) {
-      setStatusMessage({
-        type: 'error',
-        message: err.message || 'เกิดข้อผิดพลาดในการนำเข้าไฟล์ Excel',
-      })
-    } finally {
-      setImportingBoard(false)
+      return err?.message || 'เกิดข้อผิดพลาดในการกระทบยอดไฟล์ Excel'
     }
   }
 
@@ -699,48 +709,31 @@ export default function DailyBoardPage() {
           </div>
         </div>
 
-        <div className="bg-emerald-50/60 p-4 rounded-xl border border-emerald-200/80 space-y-3">
-          <p className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
-            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-            ทางเลือกที่ 1: นำเข้าไฟล์ Excel เพื่อกระทบยอดและสร้างบอร์ดประจำวัน
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <div className="flex-1 relative">
-              <input
-                type="file"
-                accept=".xlsx, .xls, .csv"
-                id="board-excel-input"
-                className="hidden"
-                onChange={(e) => setBoardExcelFile(e.target.files?.[0] || null)}
-              />
-              <label
-                htmlFor="board-excel-input"
-                className="flex items-center gap-2 px-3.5 py-2 bg-white border border-emerald-300 rounded-xl text-xs font-medium text-slate-700 cursor-pointer hover:bg-emerald-50/50 transition-colors"
-              >
-                <Upload className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span className="truncate">
-                  {boardExcelFile
-                    ? boardExcelFile.name
-                    : 'คลิกเพื่อเลือกไฟล์ Excel กระทบยอดประจำวัน'}
-                </span>
-              </label>
+        <div className="bg-emerald-50/60 p-4 rounded-xl border border-emerald-200/80">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-white rounded-xl border border-emerald-200 shadow-xs">
+                <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-emerald-950">กระทบยอดจากไฟล์ Excel</p>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  เลือกไฟล์, เลือก User และกำหนด KPI Target ในหน้าต่างกระทบยอด
+                </p>
+              </div>
             </div>
 
             <button
               type="button"
-              onClick={handleImportExcelToCreateBoard}
-              disabled={!boardExcelFile || importingBoard}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 shrink-0 shadow-xs"
+              onClick={() => {
+                setStatusMessage({ type: null, message: '' })
+                fetchEmployeesList()
+                setIsReconcileModalOpen(true)
+              }}
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors shadow-sm shrink-0"
             >
-              {importingBoard ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  กำลังกระทบยอด...
-                </>
-              ) : (
-                'กระทบยอด & ลงบอร์ด KPI'
-              )}
+              <Upload className="w-4 h-4" />
+              กระทบยอด Excel
             </button>
           </div>
         </div>
@@ -902,7 +895,7 @@ export default function DailyBoardPage() {
                 <th className="p-3 border-r border-slate-300 w-48">วันที่</th>
                 <th className="p-3 border-r border-slate-300">พนักงาน</th>
                 <th className="p-3 border-r border-slate-300 w-44">
-                  KPI (Target = 35)
+                  KPI (Achieved / Target)
                 </th>
                 <th className="p-3 border-r border-slate-300 w-36">
                   ผ่าน / ไม่ผ่าน
@@ -923,8 +916,9 @@ export default function DailyBoardPage() {
                     (a, b) => a + (b.has_kpi ? b.kpi_achieved : 0),
                     0
                   )
-                  const totalTarget =
-                    dateStaffList.filter((s) => s.has_kpi).length * 35
+                  const totalTarget = dateStaffList
+                    .filter((s) => s.has_kpi)
+                    .reduce((sum, staff) => sum + (Number(staff.kpi_target) || 0), 0)
                   const isDayPassed =
                     totalKpiAchieved >= totalTarget && totalTarget > 0
 
@@ -1104,7 +1098,7 @@ export default function DailyBoardPage() {
                                     </div>
                                   </td>
                                   <td className="p-2.5 border-r border-slate-300 font-mono font-bold text-center w-44">
-                                    {staff.has_kpi ? staff.kpi_achieved : '-'}
+                                    {staff.has_kpi ? `${staff.kpi_achieved} / ${staff.kpi_target}` : '-'}
                                   </td>
                                   <td className="p-2.5 border-r border-slate-300 text-center w-36 font-bold">
                                     {!staff.has_kpi ? (
@@ -1251,7 +1245,7 @@ export default function DailyBoardPage() {
                         <div>
                           <p className="font-semibold text-slate-800">{label}</p>
                           <p className="text-[11px] text-slate-400 font-mono">
-                            User: {emp?.user_number || '-'} | KPI: {rec.kpi_achieved}
+                            User: {emp?.user_number || '-'} | KPI: {rec.kpi_achieved}/{rec.kpi_target}
                           </p>
                         </div>
 
@@ -1297,6 +1291,14 @@ export default function DailyBoardPage() {
           </div>
         </div>
       )}
+
+      <DailyBoardReconcileModal
+        isOpen={isReconcileModalOpen}
+        selectedDate={selectedDate}
+        employeesList={employeesList}
+        onClose={() => setIsReconcileModalOpen(false)}
+        onConfirm={handleReconcileConfirm}
+      />
     </div>
   )
 }
