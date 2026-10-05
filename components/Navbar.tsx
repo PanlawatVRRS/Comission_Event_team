@@ -20,6 +20,7 @@ import {
   Sun,
   Moon,
 } from 'lucide-react'
+import { useLanguage } from '@/lib/i18n'
 
 interface NavbarProps {
   isCollapsed: boolean
@@ -29,13 +30,21 @@ interface NavbarProps {
 export default function Navbar({ isCollapsed, setIsCollapsed }: NavbarProps) {
   const pathname = usePathname()
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [language, setLanguage] = useState<'th' | 'en'>('th')
+  const { lang: language, setLanguage, t } = useLanguage()
   const [isDarkMode, setIsDarkMode] = useState(false)
 
-  // จัดการสถานะ Dark Mode (เช็กค่าจาก class บน HTML หรือ LocalStorage)
+  // โหลดสถานะ Dark Mode จาก localStorage หรือ System Preference
   useEffect(() => {
-    const isDark = document.documentElement.classList.contains('dark')
-    setIsDarkMode(isDark)
+    const savedTheme = localStorage.getItem('theme')
+    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+
+    if (savedTheme === 'dark' || (!savedTheme && systemPrefersDark)) {
+      setIsDarkMode(true)
+      document.documentElement.classList.add('dark')
+    } else {
+      setIsDarkMode(false)
+      document.documentElement.classList.remove('dark')
+    }
   }, [])
 
   const toggleDarkMode = () => {
@@ -51,12 +60,12 @@ export default function Navbar({ isCollapsed, setIsCollapsed }: NavbarProps) {
   }
 
   const navItems = [
-    { name: language === 'th' ? 'แดชบอร์ด' : 'Dashboard', href: '/', icon: LayoutDashboard },
-    { name: language === 'th' ? 'จัดการพนักงาน' : 'Employees', href: '/employees', icon: Users },
-    { name: language === 'th' ? 'กระดานรายวัน' : 'Daily Board', href: '/daily-board', icon: Layers },
-    { name: language === 'th' ? 'กระทบยอด (Reconcile)' : 'Reconcile', href: '/reconcile', icon: RefreshCw },
-    { name: language === 'th' ? 'ประวัติกระทบยอดรายวัน' : 'Invite History', href: '/invite-records', icon: History },
-    { name: 'Database Status', href: '/database-status', icon: Database },
+    { name: t('nav.dashboard'), href: '/', icon: LayoutDashboard },
+    { name: t('nav.employees'), href: '/employees', icon: Users },
+    { name: t('nav.dailyBoard'), href: '/daily-board', icon: Layers },
+    { name: t('nav.reconcile'), href: '/reconcile', icon: RefreshCw },
+    { name: t('nav.inviteHistory'), href: '/invite-records', icon: History },
+    { name: t('nav.dbStatus'), href: '/database-status', icon: Database },
   ]
 
   return (
@@ -89,7 +98,7 @@ export default function Navbar({ isCollapsed, setIsCollapsed }: NavbarProps) {
             <button
               onClick={() => setIsCollapsed(!isCollapsed)}
               className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors shrink-0"
-              title={isCollapsed ? 'ขยายแถบข้าง' : 'พับเก็บแถบข้าง'}
+              title={isCollapsed ? t('nav.expand') : t('nav.collapse')}
             >
               {isCollapsed ? (
                 <ChevronRight className="w-5 h-5" />
@@ -99,29 +108,37 @@ export default function Navbar({ isCollapsed, setIsCollapsed }: NavbarProps) {
             </button>
           </div>
 
-          {/* Quick Theme Toggle Button (แสดงเมื่อไม่พับแถบข้าง) */}
-          {!isCollapsed && (
-            <div className="px-1">
+          {/* Quick Theme Toggle Button */}
+          <div className="px-1">
+            {!isCollapsed ? (
               <button
                 onClick={toggleDarkMode}
                 className="w-full flex items-center justify-between px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700/80 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 transition-colors shadow-2xs"
               >
                 <span className="flex items-center gap-2">
                   {isDarkMode ? <Moon className="w-4 h-4 text-indigo-400" /> : <Sun className="w-4 h-4 text-amber-500" />}
-                  {isDarkMode ? (language === 'th' ? 'โหมดมืด (Dark)' : 'Dark Mode') : (language === 'th' ? 'โหมดสว่าง (Light)' : 'Light Mode')}
+                  {isDarkMode ? t('nav.darkMode') : t('nav.lightMode')}
                 </span>
                 <span className="text-[10px] bg-white dark:bg-slate-900 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 font-mono">
-                  Switch
+                  {t('nav.switch')}
                 </span>
               </button>
-            </div>
-          )}
+            ) : (
+              <button
+                onClick={toggleDarkMode}
+                title={isDarkMode ? t('nav.switchToLight') : t('nav.switchToDark')}
+                className="w-full flex items-center justify-center p-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors"
+              >
+                {isDarkMode ? <Moon className="w-5 h-5 text-indigo-400" /> : <Sun className="w-5 h-5 text-amber-500" />}
+              </button>
+            )}
+          </div>
 
           {/* Navigation Links */}
           <div className="space-y-1">
             {!isCollapsed && (
               <p className="px-3 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2 whitespace-nowrap">
-                {language === 'th' ? 'เมนูหลัก' : 'Main Menu'}
+                {t('nav.mainMenu')}
               </p>
             )}
             {navItems.map((item) => {
@@ -161,7 +178,7 @@ export default function Navbar({ isCollapsed, setIsCollapsed }: NavbarProps) {
         <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
           <button
             onClick={() => setIsSettingsOpen(true)}
-            title={isCollapsed ? (language === 'th' ? 'ตั้งค่าระบบ' : 'Settings') : undefined}
+            title={isCollapsed ? t('nav.settings') : undefined}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${
               isCollapsed ? 'justify-center' : ''
             }`}
@@ -169,7 +186,7 @@ export default function Navbar({ isCollapsed, setIsCollapsed }: NavbarProps) {
             <Settings className="w-5 h-5 text-slate-400 dark:text-slate-500 shrink-0" />
             {!isCollapsed && (
               <span className="whitespace-nowrap overflow-hidden text-ellipsis">
-                {language === 'th' ? 'ตั้งค่าระบบ' : 'Settings'}
+                {t('nav.settings')}
               </span>
             )}
           </button>
@@ -182,14 +199,14 @@ export default function Navbar({ isCollapsed, setIsCollapsed }: NavbarProps) {
         </div>
       </aside>
 
-      {/* Settings Modal (รวมสลับ Dark/Light Mode และเปลี่ยนภาษา) */}
+      {/* Settings Modal */}
       {isSettingsOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl max-w-md w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200 text-slate-900 dark:text-slate-100">
             <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-3">
               <h3 className="text-base font-bold flex items-center gap-2">
                 <Settings className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                {language === 'th' ? 'ตั้งค่าระบบ (System Settings)' : 'System Settings'}
+                {t('settings.title')}
               </h3>
               <button
                 onClick={() => setIsSettingsOpen(false)}
@@ -200,11 +217,11 @@ export default function Navbar({ isCollapsed, setIsCollapsed }: NavbarProps) {
             </div>
 
             <div className="space-y-4 text-xs">
-              {/* ตั้งค่า Theme (Dark / Light Mode) ใน Modal */}
+              {/* ตั้งค่า Theme */}
               <div className="space-y-2">
                 <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                   {isDarkMode ? <Moon className="w-4 h-4 text-indigo-400" /> : <Sun className="w-4 h-4 text-amber-500" />}
-                  {language === 'th' ? 'รูปแบบการแสดงผล (Theme)' : 'Theme Mode'}
+                  {t('settings.theme')}
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -243,11 +260,11 @@ export default function Navbar({ isCollapsed, setIsCollapsed }: NavbarProps) {
                 </div>
               </div>
 
-              {/* ตั้งค่าภาษาใน Modal */}
+              {/* ตั้งค่าภาษา */}
               <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                 <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                   <Globe className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                  {language === 'th' ? 'เลือกภาษา (Language)' : 'Select Language'}
+                  {t('settings.language')}
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -285,7 +302,7 @@ export default function Navbar({ isCollapsed, setIsCollapsed }: NavbarProps) {
                 onClick={() => setIsSettingsOpen(false)}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-xs shadow-xs transition-colors"
               >
-                {language === 'th' ? 'บันทึก / ปิด' : 'Save & Close'}
+                {t('settings.saveClose')}
               </button>
             </div>
           </div>

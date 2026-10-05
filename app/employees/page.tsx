@@ -4,9 +4,11 @@ import { useEffect, useState } from 'react'
 import { supabase, Employee } from '@/lib/supabase'
 import CommissionTable from '@/components/CommissionTable'
 import EmployeeModal from '@/components/EmployeeModal'
+import { useLanguage } from '@/lib/i18n'
 import { UserPlus, Users, RefreshCw } from 'lucide-react'
 
 export default function EmployeesPage() {
+  const { t } = useLanguage()
   const [employees, setEmployees] = useState<Employee[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
@@ -32,11 +34,9 @@ export default function EmployeesPage() {
   }, [])
 
   const handleSaveEmployee = async (employeeData: Partial<Employee>) => {
-    // กำหนดค่าเบอร์โทรให้แน่ใจว่าเป็น string (ถ้าไม่มีส่งไปเป็น '')
     const phoneVal = employeeData.phone || (employeeData as any).phone_number || ''
 
     if (employeeData.id) {
-      // แก้ไขพนักงาน
       const { error } = await supabase
         .from('employees')
         .update({
@@ -50,7 +50,6 @@ export default function EmployeesPage() {
 
       if (error) throw new Error(error.message)
     } else {
-      // เพิ่มพนักงานใหม่
       const { error } = await supabase.from('employees').insert([
         {
           full_name: employeeData.full_name,
@@ -68,10 +67,10 @@ export default function EmployeesPage() {
   }
 
   const handleDeleteEmployee = async (id: string) => {
-    if (confirm('คุณต้องการลบข้อมูลพนักงานรายนี้ใช่หรือไม่?')) {
+    if (confirm(t('employees.confirmDelete'))) {
       const { error } = await supabase.from('employees').delete().eq('id', id)
       if (error) {
-        alert(`ไม่สามารถลบพนักงานได้: ${error.message}`)
+        alert(t('employees.deleteFail', { msg: error.message }))
       } else {
         fetchEmployees()
       }
@@ -82,31 +81,31 @@ export default function EmployeesPage() {
     <div className="p-8 max-w-7xl mx-auto space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-            <Users className="w-6 h-6 text-blue-600" />
-            ระบบจัดการพนักงาน
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+            <Users className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            {t('employees.title')}
           </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            เพิ่ม แก้ไข หรือลบรายชื่อพนักงาน ชื่อเล่น เบอร์โทรศัพท์ และ User Number
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            {t('employees.subtitle')}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={fetchEmployees}
-            className="p-2.5 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors flex items-center gap-1.5 text-xs font-semibold border border-slate-200"
+            className="p-2.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors flex items-center gap-1.5 text-xs font-semibold border border-slate-200 dark:border-slate-800"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            รีเฟรช
+            {t('common.refresh')}
           </button>
           <button
             onClick={() => {
               setSelectedEmployee(null)
               setIsModalOpen(true)
             }}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-xs sm:text-sm flex items-center gap-2 transition-colors shadow-xs"
+            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 dark:hover:bg-blue-500 text-white font-semibold rounded-xl text-xs sm:text-sm flex items-center gap-2 transition-colors shadow-xs"
           >
             <UserPlus className="w-4 h-4" />
-            เพิ่มพนักงานใหม่
+            {t('employees.add')}
           </button>
         </div>
       </div>

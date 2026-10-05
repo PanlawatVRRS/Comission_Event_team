@@ -9,11 +9,56 @@ const supabaseKey =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   ''
 
+type Lang = 'th' | 'en'
+
+const messages = {
+  noEnv: {
+    th: 'ยังไม่ได้ตั้งค่า SUPABASE URL หรือ KEY ใน .env.local',
+    en: 'SUPABASE URL or KEY is not set in .env.local',
+  },
+  noFile: {
+    th: 'กรุณาเลือกไฟล์ที่ต้องการอัปโหลด',
+    en: 'Please choose a file to upload',
+  },
+  noSheet: {
+    th: 'ไม่พบ Sheet ข้อมูลในไฟล์ Excel',
+    en: 'No data sheet found in the Excel file',
+  },
+  noData: {
+    th: 'ไม่พบข้อมูลในไฟล์ Excel',
+    en: 'No data found in the Excel file',
+  },
+  noUserNumber: {
+    th: 'ไม่พบข้อมูล User number ในไฟล์ Excel กรุณาเช็คหัวตารางคอลัมน์แรก',
+    en: 'No User number data found in the Excel file. Please check the first column header.',
+  },
+  resetFail: {
+    th: (m: string) => `ไม่สามารถรีเซ็ตค่าเริ่มต้นใน DB ได้ (ติด RLS): ${m}`,
+    en: (m: string) => `Could not reset values in the DB (blocked by RLS?): ${m}`,
+  },
+  fetchFail: {
+    th: (m: string) => `ไม่สามารถดึงตารางพนักงานได้: ${m}`,
+    en: (m: string) => `Could not fetch the employees table: ${m}`,
+  },
+  success: {
+    th: (total: number, matched: number) =>
+      `ประมวลผลสำเร็จ! พบข้อมูล ${total} รายการ ตรงกับพนักงานในระบบ ${matched} คน`,
+    en: (total: number, matched: number) =>
+      `Done! Found ${total} records, matching ${matched} employees in the system`,
+  },
+  unknown: {
+    th: 'เกิดข้อผิดพลาดไม่ทราบสาเหตุบนเซิร์ฟเวอร์',
+    en: 'Unknown server error',
+  },
+}
+
 export async function POST(req: Request) {
+  let lang: Lang = 'th'
+
   try {
     if (!supabaseUrl || !supabaseKey) {
       return NextResponse.json(
-        { error: 'ยังไม่ได้ตั้งค่า SUPABASE URL หรือ KEY ใน .env.local' },
+        { error: messages.noEnv[lang] },
         { status: 500 }
       )
     }
@@ -23,9 +68,10 @@ export async function POST(req: Request) {
     // 1. รับไฟล์จาก FormData
     const formData = await req.formData()
     const file = formData.get('file') as File | null
+    lang = formData.get('lang') === 'en' ? 'en' : 'th'
 
     if (!file) {
-      return NextResponse.json({ error: 'กรุณาเลือกไฟล์ที่ต้องการอัปโหลด' }, { status: 400 })
+      return NextResponse.json({ error: messages.noFile[lang] }, { status: 400 })
     }
 
     // 2. อ่านไฟล์ Excel
@@ -34,14 +80,14 @@ export async function POST(req: Request) {
     const sheetName = workbook.SheetNames[0]
 
     if (!sheetName) {
-      return NextResponse.json({ error: 'ไม่พบ Sheet ข้อมูลในไฟล์ Excel' }, { status: 400 })
+      return NextResponse.json({ error: messages.noSheet[lang] }, { status: 400 })
     }
 
     const worksheet = workbook.Sheets[sheetName]
     const rawData = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet)
 
     if (!rawData || rawData.length === 0) {
-      return NextResponse.json({ error: 'ไม่พบข้อมูลในไฟล์ Excel' }, { status: 400 })
+      return NextResponse.json({ error: messages.noData[lang] }, { status: 400 })
     }
 
     // 3. อ่านและนับยอด User Number (รองรับหลายชื่อคอลัมน์ และตัดเว้นวรรค)
@@ -73,7 +119,7 @@ export async function POST(req: Request) {
 
     if (totalValidRows === 0) {
       return NextResponse.json(
-        { error: 'ไม่พบข้อมูล User number ในไฟล์ Excel กรุณาเช็คหัวตารางคอลัมน์แรก' },
+        { error: messages.noUserNumber[lang] },
         { status: 400 }
       )
     }
@@ -87,7 +133,7 @@ export async function POST(req: Request) {
     if (resetError) {
       console.error('Reset Error:', resetError)
       return NextResponse.json(
-        { error: `ไม่สามารถรีเซ็ตค่าเริ่มต้นใน DB ได้ (ติด RLS): ${resetError.message}` },
+        { error: messages.resetFail[lang](resetError.message) },
         { status: 500 }
       )
     }
@@ -99,7 +145,7 @@ export async function POST(req: Request) {
 
     if (fetchEmpErr || !dbEmployees) {
       return NextResponse.json(
-        { error: `ไม่สามารถดึงตารางพนักงานได้: ${fetchEmpErr?.message}` },
+        { error: messages.fetchFail[lang](fetchEmpErr?.message ?? '') },
         { status: 500 }
       )
     }
@@ -147,12 +193,12 @@ export async function POST(req: Request) {
       success: true,
       totalImported: totalValidRows,
       uniqueUsers: matchedCount,
-      message: `ประมวลผลสำเร็จ! พบข้อมูล ${totalValidRows} รายการ ตรงกับพนักงานในระบบ ${matchedCount} คน`,
+      message: messages.success[lang](totalValidRows, matchedCount),
     })
   } catch (err: any) {
     console.error('API Reconcile Error:', err)
     return NextResponse.json(
-      { error: err.message || 'เกิดข้อผิดพลาดไม่ทราบสาเหตุบนเซิร์ฟเวอร์' },
+      { error: err.message || messages.unknown[lang] },
       { status: 500 }
     )
   }

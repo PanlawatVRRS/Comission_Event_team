@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { supabase, Employee } from '@/lib/supabase'
 import * as XLSX from 'xlsx'
 import DailyBoardReconcileModal from '@/components/DailyBoardReconcileModal'
+import { useLanguage } from '@/lib/i18n'
 import {
   Layers,
   RefreshCw,
@@ -49,6 +50,7 @@ interface InviteItem {
 }
 
 export default function DailyBoardPage() {
+  const { t } = useLanguage()
   const [records, setRecords] = useState<KPIRecord[]>([])
   const [employeesList, setEmployeesList] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
@@ -144,20 +146,20 @@ export default function DailyBoardPage() {
     selectedImportUserIds: string[],
     importKpiTargets: Record<string, number>
   ): Promise<string | null> => {
-    if (!selectedDate) return 'กรุณาเลือกวันที่ต้องการสร้างบอร์ด'
+    if (!selectedDate) return t('board.selectDate')
 
     try {
       const dataBuffer = await boardExcelFile.arrayBuffer()
       const workbook = XLSX.read(Buffer.from(dataBuffer), { type: 'buffer' })
       const sheetName = workbook.SheetNames[0]
 
-      if (!sheetName) throw new Error('ไม่พบข้อมูล Sheet ในไฟล์ Excel')
+      if (!sheetName) throw new Error(t('board.noSheet'))
 
       const worksheet = workbook.Sheets[sheetName]
       const rawData = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, { header: 1 })
 
       if (!rawData || rawData.length <= 1) {
-        throw new Error('ไม่พบข้อมูลในไฟล์ Excel หรือไฟล์ว่างเปล่า')
+        throw new Error(t('board.emptyFile'))
       }
 
       const userCounts: Record<string, number> = {}
@@ -194,7 +196,7 @@ export default function DailyBoardPage() {
       setRawInviteData(inviteDataList)
 
       if (selectedImportUserIds.length === 0) {
-        throw new Error('กรุณาเลือก User ที่ต้องการกระทบยอด')
+        throw new Error(t('board.selectUser'))
       }
 
       const selectedEmployees = employeesList.filter((emp) =>
@@ -225,7 +227,7 @@ export default function DailyBoardPage() {
 
       if (recordsToInsert.length === 0) {
         throw new Error(
-          'ไม่พบรายการ Recommender user number ใน Excel ที่ตรงกับ User Number ของพนักงานในระบบ'
+          t('board.noMatch')
         )
       }
 
@@ -237,13 +239,13 @@ export default function DailyBoardPage() {
 
       setStatusMessage({
         type: 'success',
-        message: `สร้างบอร์ดประจำวันที่ ${selectedDate} สำเร็จ! นำเข้าข้อมูล Recommender และ Creation Time เรียบร้อย (${recordsToInsert.length} คน)`,
+        message: t('board.createdOk', { date: selectedDate, n: recordsToInsert.length }),
       })
 
       fetchRecords()
       return null
     } catch (err: any) {
-      return err?.message || 'เกิดข้อผิดพลาดในการกระทบยอดไฟล์ Excel'
+      return err?.message || t('board.reconcileFail')
     }
   }
 
@@ -332,7 +334,7 @@ export default function DailyBoardPage() {
       ])
       setStatusMessage({
         type: 'success',
-        message: `เพิ่มพนักงานลงบอร์ดประจำวันที่ ${selectedDate} เรียบร้อยแล้ว`,
+        message: t('board.addedOk', { date: selectedDate }),
       })
       fetchRecords()
     } else {
@@ -362,7 +364,7 @@ export default function DailyBoardPage() {
 
     if (
       confirm(
-        `คุณต้องการลบรายการที่เลือกจำนวน ${selectedRecordIds.length} รายการ ใช่หรือไม่?`
+        t('board.confirmDeleteSelected', { n: selectedRecordIds.length })
       )
     ) {
       const { error } = await supabase
@@ -375,10 +377,10 @@ export default function DailyBoardPage() {
         setSelectedRecordIds([])
         setStatusMessage({
           type: 'success',
-          message: 'ลบรายการที่เลือกเรียบร้อยแล้ว',
+          message: t('board.deletedSelected'),
         })
       } else {
-        alert(`เกิดข้อผิดพลาดในการลบ: ${error.message}`)
+        alert(t('board.deleteFail', { msg: error.message }))
       }
     }
   }
@@ -387,7 +389,7 @@ export default function DailyBoardPage() {
     const dayLabel = formatDateLabel(dateStr)
     if (
       confirm(
-        `⚠️ เตือน: คุณต้องการลบข้อมูลบอร์ดประจำวันที่ "${dayLabel}" ทั้งหมดใช่หรือไม่?`
+        t('board.confirmDeleteDay', { day: dayLabel })
       )
     ) {
       const { error } = await supabase
@@ -405,10 +407,10 @@ export default function DailyBoardPage() {
         setSelectedRecordIds((prev) => prev.filter((id) => !dayIds.includes(id)))
         setStatusMessage({
           type: 'success',
-          message: `ลบข้อมูลบอร์ดประจำวันที่ ${dayLabel} เรียบร้อยแล้ว`,
+          message: t('board.deletedDay', { day: dayLabel }),
         })
       } else {
-        alert(`เกิดข้อผิดพลาดในการลบข้อมูลประจำวัน: ${error.message}`)
+        alert(t('board.deleteDayFail', { msg: error.message }))
       }
     }
   }
@@ -420,7 +422,7 @@ export default function DailyBoardPage() {
     const initialAssignments: Record<string, string> = {}
     dayRecords.forEach((rec, idx) => {
       const teamNum = (idx % teamCount) + 1
-      initialAssignments[rec.staff_name] = `ทีม ${teamNum}`
+      initialAssignments[rec.staff_name] = String(teamNum)
     })
 
     setTeamAssignments(initialAssignments)
@@ -433,7 +435,7 @@ export default function DailyBoardPage() {
     const updatedAssignments: Record<string, string> = {}
     dayRecords.forEach((rec, idx) => {
       const teamNum = (idx % newCount) + 1
-      updatedAssignments[rec.staff_name] = `ทีม ${teamNum}`
+      updatedAssignments[rec.staff_name] = String(teamNum)
     })
     setTeamAssignments(updatedAssignments)
   }
@@ -443,12 +445,11 @@ export default function DailyBoardPage() {
     const updatedAssignments: Record<string, string> = {}
     dayRecords.forEach((rec, idx) => {
       const teamNum = (idx % teamCount) + 1
-      updatedAssignments[rec.staff_name] = `ทีม ${teamNum}`
+      updatedAssignments[rec.staff_name] = String(teamNum)
     })
     setTeamAssignments(updatedAssignments)
   }
 
-  // ส่งออก Excel: พร้อมใส่สีหัวตารางเหลืองพาสเทลและจัดรูปแบบตารางอย่างสวยงาม
   const handleDownloadExcelReport = () => {
     const dayRecords = records.filter((r) => r.record_date === exportDate)
     if (dayRecords.length === 0) return
@@ -457,7 +458,7 @@ export default function DailyBoardPage() {
 
     const teamsMap: Record<string, KPIRecord[]> = {}
     dayRecords.forEach((rec) => {
-      const teamName = teamAssignments[rec.staff_name] || 'ทีม 1'
+      const teamName = teamAssignments[rec.staff_name] || '1'
       if (!teamsMap[teamName]) teamsMap[teamName] = []
       teamsMap[teamName].push(rec)
     })
@@ -466,11 +467,11 @@ export default function DailyBoardPage() {
       const sheetData: any[][] = []
 
       sheetData.push([
-        'U ID สำหรับกระทบยอด',
-        'เวลาสำเร็จ',
+        t('xl.uid'),
+        t('xl.time'),
         '',
-        'รายชื่อทีม Event ภาคสนาม',
-        'User Number พนักงาน',
+        t('xl.teamList'),
+        t('xl.userNumber'),
       ])
 
       const teamUserNumbers: string[] = []
@@ -508,7 +509,6 @@ export default function DailyBoardPage() {
 
       const worksheet = XLSX.utils.aoa_to_sheet(sheetData)
 
-      // ตกแต่งสไตล์ Excel (แถบหัวตารางสีเหลืองพาสเทล, เส้นขอบ, จัดตำแหน่ง)
       const borderStyle = {
         top: { style: 'thin', color: { rgb: 'D3D3D3' } },
         bottom: { style: 'thin', color: { rgb: 'D3D3D3' } },
@@ -528,7 +528,7 @@ export default function DailyBoardPage() {
 
           if (R === 0) {
             if (C !== 2) {
-              worksheet[cellAddress].s.fill = { fgColor: { rgb: 'FFF2CC' } } // สีเหลืองพาสเทล
+              worksheet[cellAddress].s.fill = { fgColor: { rgb: 'FFF2CC' } }
               worksheet[cellAddress].s.font = { bold: true, color: { rgb: '000000' }, sz: 11 }
               worksheet[cellAddress].s.alignment = { horizontal: 'center', vertical: 'center', wrapText: true }
             }
@@ -544,14 +544,14 @@ export default function DailyBoardPage() {
       }
 
       worksheet['!cols'] = [
-        { wch: 32 }, // U ID สำหรับกระทบยอด
-        { wch: 22 }, // เวลาสำเร็จ
-        { wch: 4 },  // ช่องว่าง
-        { wch: 24 }, // รายชื่อทีม Event ภาคสนาม
-        { wch: 30 }, // User Number พนักงาน
+        { wch: 32 },
+        { wch: 22 },
+        { wch: 4 },
+        { wch: 24 },
+        { wch: 30 },
       ]
 
-      XLSX.utils.book_append_sheet(workbook, worksheet, teamName)
+      XLSX.utils.book_append_sheet(workbook, worksheet, t('board.team', { n: teamName }))
     })
 
     const inviteSheetData: string[][] = [[
@@ -633,7 +633,7 @@ export default function DailyBoardPage() {
 
   const handleDeleteRecord = async (id?: string) => {
     if (!id) return
-    if (confirm('คุณต้องการลบรายการนี้ใช่หรือไม่?')) {
+    if (confirm(t('board.confirmDeleteOne'))) {
       await supabase.from('daily_kpi_records').delete().eq('id', id)
       setRecords((prev) => prev.filter((r) => r.id !== id))
       setSelectedRecordIds((prev) => prev.filter((item) => item !== id))
@@ -669,14 +669,15 @@ export default function DailyBoardPage() {
 
   return (
     <div className="p-4 sm:p-8 max-w-6xl mx-auto space-y-6">
+      {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-            <Layers className="w-6 h-6 text-blue-600" />
-            กระดานสรุปผลรายวัน (Daily KPI Board)
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+            <Layers className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            {t('board.title')}
           </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            นำเข้าไฟล์ Excel กระทบยอดเพื่อลงยอด KPI อัตโนมัติ จัดกลุ่มทีมแยก Sheet และส่งออกรายงานอย่างสวยงาม
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            {t('board.subtitle')}
           </p>
         </div>
 
@@ -685,40 +686,43 @@ export default function DailyBoardPage() {
             fetchEmployeesList()
             fetchRecords()
           }}
-          className="p-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors flex items-center gap-1.5 text-xs font-semibold border border-slate-200 self-start sm:self-auto"
+          className="p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 rounded-xl transition-colors flex items-center gap-1.5 text-xs font-semibold border border-slate-200 dark:border-slate-700 self-start sm:self-auto"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          รีเฟรช
+          {t('common.refresh')}
         </button>
       </div>
 
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-5">
-        <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-          <Calendar className="w-5 h-5 text-blue-600" />
+      {/* Control Card */}
+      <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-5 transition-colors">
+        {/* Date Selector */}
+        <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+          <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-400" />
           <div className="flex-1 max-w-xs">
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              เลือกวันที่ต้องการสร้างบอร์ด
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+              {t('board.pickDate')}
             </label>
             <input
               type="date"
               required
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-full px-3 py-1.5 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 outline-none transition-colors"
             />
           </div>
         </div>
 
-        <div className="bg-emerald-50/60 p-4 rounded-xl border border-emerald-200/80">
+        {/* Reconcile Excel Card */}
+        <div className="bg-emerald-50/60 dark:bg-emerald-950/30 p-4 rounded-xl border border-emerald-200/80 dark:border-emerald-800/50 transition-colors">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-start gap-3">
-              <div className="p-2 bg-white rounded-xl border border-emerald-200 shadow-xs">
-                <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
+              <div className="p-2 bg-white dark:bg-slate-800 rounded-xl border border-emerald-200 dark:border-emerald-800/80 shadow-xs">
+                <FileSpreadsheet className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
               </div>
               <div>
-                <p className="text-xs font-bold text-emerald-950">กระทบยอดจากไฟล์ Excel</p>
-                <p className="text-[11px] text-slate-500 mt-1">
-                  เลือกไฟล์, เลือก User และกำหนด KPI Target ในหน้าต่างกระทบยอด
+                <p className="text-xs font-bold text-emerald-950 dark:text-emerald-300">{t('board.reconcileTitle')}</p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                  {t('board.reconcileDesc')}
                 </p>
               </div>
             </div>
@@ -730,45 +734,47 @@ export default function DailyBoardPage() {
                 fetchEmployeesList()
                 setIsReconcileModalOpen(true)
               }}
-              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors shadow-sm shrink-0"
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors shadow-xs shrink-0"
             >
               <Upload className="w-4 h-4" />
-              กระทบยอด Excel
+              {t('board.reconcileBtn')}
             </button>
           </div>
         </div>
 
+        {/* Alert Messages */}
         {statusMessage.type === 'success' && (
-          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60 rounded-xl text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
             <span>{statusMessage.message}</span>
           </div>
         )}
 
         {statusMessage.type === 'error' && (
-          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+          <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 rounded-xl text-xs text-rose-800 dark:text-rose-300 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
             <span>{statusMessage.message}</span>
           </div>
         )}
 
-        <form onSubmit={handleSubmitManualStaff} className="space-y-3 pt-2 border-t border-slate-100">
+        {/* Manual Add Form */}
+        <form onSubmit={handleSubmitManualStaff} className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
           <div className="flex justify-between items-center">
-            <p className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-              <UserCheck className="w-4 h-4 text-blue-600" />
-              ทางเลือกที่ 2: เลือกและเพิ่มพนักงานด้วยตนเอง ({staffRows.length} คน)
+            <p className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+              <UserCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              {t('board.option2', { n: staffRows.length })}
             </p>
-            <span className="text-[11px] text-slate-400">
-              พนักงานในระบบ {employeesList.length} คน
+            <span className="text-[11px] text-slate-400 dark:text-slate-500">
+              {t('board.staffInSystem', { n: employeesList.length })}
             </span>
           </div>
 
           {staffRows.map((row, index) => (
             <div
               key={row.tempId}
-              className="flex flex-wrap items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200/80"
+              className="flex flex-wrap items-center gap-2 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-700/60 transition-colors"
             >
-              <span className="text-xs font-mono font-bold text-slate-400 w-5 text-center">
+              <span className="text-xs font-mono font-bold text-slate-400 dark:text-slate-500 w-5 text-center">
                 {index + 1}.
               </span>
 
@@ -777,18 +783,18 @@ export default function DailyBoardPage() {
                   required
                   value={row.staff_name}
                   onChange={(e) => handleSelectStaff(row.tempId, e.target.value)}
-                  className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 outline-none transition-colors"
                 >
-                  <option value="">-- เลือกพนักงาน --</option>
+                  <option value="" className="dark:bg-slate-800">{t('board.selectStaff')}</option>
                   {employeesList.map((emp) => (
-                    <option key={emp.id} value={emp.full_name}>
+                    <option key={emp.id} value={emp.full_name} className="dark:bg-slate-800">
                       {formatEmployeeLabel(emp)}
                     </option>
                   ))}
                 </select>
               </div>
 
-              <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white rounded-lg border border-slate-200">
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors">
                 <input
                   type="checkbox"
                   id={`hasKpi-${row.tempId}`}
@@ -796,13 +802,13 @@ export default function DailyBoardPage() {
                   onChange={(e) =>
                     handleRowChange(row.tempId, 'has_kpi', e.target.checked)
                   }
-                  className="w-3.5 h-3.5 rounded-xs text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  className="w-3.5 h-3.5 rounded-xs text-blue-600 dark:text-blue-500 focus:ring-blue-500 cursor-pointer"
                 />
                 <label
                   htmlFor={`hasKpi-${row.tempId}`}
-                  className="text-xs text-slate-700 font-semibold cursor-pointer select-none"
+                  className="text-xs text-slate-700 dark:text-slate-300 font-semibold cursor-pointer select-none"
                 >
-                  {row.has_kpi ? 'มี KPI' : 'ไม่มี KPI'}
+                  {row.has_kpi ? t('board.hasKpi') : t('board.noKpi')}
                 </label>
               </div>
 
@@ -820,7 +826,7 @@ export default function DailyBoardPage() {
                       e.target.value === '' ? '' : Number(e.target.value)
                     )
                   }
-                  className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-center font-mono font-bold focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-100 disabled:text-slate-400"
+                  className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-center font-mono font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 outline-none disabled:bg-slate-100 dark:disabled:bg-slate-900 disabled:text-slate-400 dark:disabled:text-slate-600 transition-colors"
                 />
               </div>
 
@@ -828,7 +834,7 @@ export default function DailyBoardPage() {
                 type="button"
                 onClick={() => handleRemoveRow(row.tempId)}
                 disabled={staffRows.length === 1}
-                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-30 ml-auto"
+                className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors disabled:opacity-30 ml-auto"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -839,75 +845,77 @@ export default function DailyBoardPage() {
             <button
               type="button"
               onClick={handleAddRow}
-              className="px-3 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 font-semibold rounded-xl text-xs flex items-center gap-1 transition-colors"
+              className="px-3 py-1.5 text-blue-600 dark:text-blue-400 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 font-semibold rounded-xl text-xs flex items-center gap-1 transition-colors"
             >
               <Plus className="w-4 h-4" />
-              เพิ่มพนักงานอีกคน
+              {t('board.addAnother')}
             </button>
 
             <button
               type="submit"
-              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
+              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
             >
               <UserPlus className="w-4 h-4" />
-              บันทึกพนักงาน ({staffRows.filter((r) => r.staff_name.trim()).length} คน)
+              {t('board.saveStaff', { n: staffRows.filter((r) => r.staff_name.trim()).length })}
             </button>
           </div>
         </form>
       </div>
 
+      {/* Floating Bulk Action Bar */}
       {selectedRecordIds.length > 0 && (
-        <div className="bg-rose-900 text-white p-3.5 rounded-2xl flex items-center justify-between shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-200">
+        <div className="bg-rose-900 dark:bg-rose-950 text-white p-3.5 rounded-2xl flex items-center justify-between shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-200 border border-rose-800 dark:border-rose-900">
           <div className="flex items-center gap-2 text-xs font-medium">
             <CheckSquare className="w-4 h-4 text-rose-300" />
             <span>
-              เลือกอยู่ <strong>{selectedRecordIds.length}</strong> รายการ
+              {t('board.selectedPre')}<strong>{selectedRecordIds.length}</strong>{t('board.selectedPost')}
             </span>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               onClick={() => setSelectedRecordIds([])}
-              className="px-3 py-1 bg-rose-800 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold transition-colors"
+              className="px-3 py-1 bg-rose-800 hover:bg-rose-700 dark:bg-rose-900 dark:hover:bg-rose-800 text-white rounded-lg text-xs font-semibold transition-colors"
             >
-              ยกเลิกเลือก
+              {t('board.clearSelect')}
             </button>
             <button
               onClick={handleDeleteSelectedRecords}
-              className="px-3.5 py-1 bg-white hover:bg-rose-50 text-rose-700 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors shadow-xs"
+              className="px-3.5 py-1 bg-white dark:bg-slate-100 hover:bg-rose-50 text-rose-700 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors shadow-xs"
             >
               <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-              ลบรายการที่เลือก ({selectedRecordIds.length})
+              {t('board.deleteSelected', { n: selectedRecordIds.length })}
             </button>
           </div>
         </div>
       )}
 
-      <div className="bg-white rounded-2xl border-2 border-slate-900 shadow-xl overflow-hidden">
-        <div className="bg-slate-950 text-white font-black text-center py-3 text-lg tracking-wider uppercase">
+      {/* Main Table Container */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-900 dark:border-slate-700 shadow-xl overflow-hidden transition-colors">
+        <div className="bg-slate-950 dark:bg-slate-950 text-white font-black text-center py-3 text-lg tracking-wider uppercase border-b border-slate-800">
           DAILY KPI TRACKER
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-xs border-collapse">
             <thead>
-              <tr className="bg-slate-200 text-slate-800 font-bold text-center border-b border-slate-300">
-                <th className="p-3 border-r border-slate-300 w-48">วันที่</th>
-                <th className="p-3 border-r border-slate-300">พนักงาน</th>
-                <th className="p-3 border-r border-slate-300 w-44">
+              <tr className="bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-center border-b border-slate-300 dark:border-slate-700">
+                <th className="p-3 border-r border-slate-300 dark:border-slate-700 w-48">{t('board.colDate')}</th>
+                <th className="p-3 border-r border-slate-300 dark:border-slate-700">{t('board.colStaff')}</th>
+                <th className="p-3 border-r border-slate-300 dark:border-slate-700 w-44">
                   KPI (Achieved / Target)
                 </th>
-                <th className="p-3 border-r border-slate-300 w-36">
-                  ผ่าน / ไม่ผ่าน
+                <th className="p-3 border-r border-slate-300 dark:border-slate-700 w-36">
+                  {t('board.passFail')}
                 </th>
-                <th className="p-3 w-24">จัดการ</th>
+                <th className="p-3 w-24">{t('common.manage')}</th>
               </tr>
             </thead>
             <tbody>
               {Object.keys(groupedRecords).length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-slate-400">
-                    ยังไม่มีข้อมูลรายวัน กรอกข้อมูลด้านบนหรืออัปโหลด Excel เพื่อสร้างบอร์ด
+                  <td colSpan={5} className="p-8 text-center text-slate-400 dark:text-slate-500">
+                    {t('board.emptyDay')}
                   </td>
                 </tr>
               ) : (
@@ -930,49 +938,51 @@ export default function DailyBoardPage() {
                     dayIds.every((id) => selectedRecordIds.includes(id))
 
                   return (
-                    <tr key={dateStr} className="border-b-2 border-slate-800">
-                      <td className="p-3 font-bold text-center border-r-2 border-slate-800 bg-slate-50 align-top space-y-2">
-                        <div className="text-sm text-rose-600 font-extrabold">
+                    <tr key={dateStr} className="border-b-2 border-slate-800 dark:border-slate-700">
+                      {/* Left Column: Date & Actions */}
+                      <td className="p-3 font-bold text-center border-r-2 border-slate-800 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/80 align-top space-y-2">
+                        <div className="text-sm text-rose-600 dark:text-rose-400 font-extrabold">
                           {formatDateLabel(dateStr)}
                         </div>
 
-                        <div className="pt-2 border-t border-slate-200 flex flex-col items-center gap-1.5">
+                        <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex flex-col items-center gap-1.5">
                           <button
                             type="button"
                             onClick={() => handleOpenExportModal(dateStr)}
-                            className="w-full text-[11px] text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-md font-semibold flex items-center justify-center gap-1 transition-colors border border-emerald-200"
-                            title="ดาวน์โหลดไฟล์ Excel แยกทีม"
+                            className="w-full text-[11px] text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 px-2.5 py-1 rounded-md font-semibold flex items-center justify-center gap-1 transition-colors border border-emerald-200 dark:border-emerald-800/60"
+                            title={t('board.exportTitleAttr')}
                           >
-                            <Download className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>ส่งออก Excel</span>
+                            <Download className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                            <span>{t('board.exportExcel')}</span>
                           </button>
 
                           <button
                             type="button"
                             onClick={() => handleToggleSelectDay(dateStaffList)}
-                            className="text-[11px] text-slate-600 hover:text-blue-600 flex items-center gap-1 font-medium transition-colors"
-                            title="เลือกพนักงานทั้งหมดของวันนี้"
+                            className="text-[11px] text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1 font-medium transition-colors"
+                            title={t('board.selectDayTitle')}
                           >
                             {isAllDaySelected ? (
-                              <CheckSquare className="w-3.5 h-3.5 text-blue-600" />
+                              <CheckSquare className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                             ) : (
-                              <Square className="w-3.5 h-3.5 text-slate-400" />
+                              <Square className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
                             )}
-                            <span>เลือกทั้งวัน ({dateStaffList.length})</span>
+                            <span>{t('board.selectDay', { n: dateStaffList.length })}</span>
                           </button>
 
                           <button
                             type="button"
                             onClick={() => handleDeleteEntireDay(dateStr)}
-                            className="text-[11px] text-rose-600 hover:bg-rose-50 px-2 py-1 rounded-md font-semibold flex items-center gap-1 transition-colors border border-rose-200/60"
-                            title="ลบข้อมูลบอร์ดประจำวันนี้ทั้งหมด"
+                            className="text-[11px] text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 px-2 py-1 rounded-md font-semibold flex items-center gap-1 transition-colors border border-rose-200/60 dark:border-rose-900/60"
+                            title={t('board.deleteDayTitle')}
                           >
-                            <Trash2 className="w-3 h-3 text-rose-500" />
-                            <span>ลบทั้งวัน</span>
+                            <Trash2 className="w-3 h-3 text-rose-500 dark:text-rose-400" />
+                            <span>{t('board.deleteDay')}</span>
                           </button>
                         </div>
                       </td>
 
+                      {/* Right Inner Table: Staff Rows & Total */}
                       <td colSpan={4} className="p-0 align-top">
                         <table className="w-full text-xs">
                           <tbody>
@@ -982,16 +992,16 @@ export default function DailyBoardPage() {
                                 staff.kpi_achieved >= staff.kpi_target
                               const staffBg =
                                 sIdx % 2 === 0
-                                  ? 'bg-amber-50/40'
-                                  : 'bg-blue-50/40'
+                                  ? 'bg-amber-50/40 dark:bg-amber-950/10'
+                                  : 'bg-blue-50/40 dark:bg-blue-950/10'
                               const isSelected = !!staff.id && selectedRecordIds.includes(staff.id)
 
                               return isEditing ? (
                                 <tr
                                   key={staff.id}
-                                  className="border-b border-blue-300 bg-blue-50/70"
+                                  className="border-b border-blue-300 dark:border-blue-800 bg-blue-50/70 dark:bg-blue-950/40"
                                 >
-                                  <td className="p-2 border-r border-slate-300">
+                                  <td className="p-2 border-r border-slate-300 dark:border-slate-700">
                                     <select
                                       value={editForm.staff_name}
                                       onChange={(e) =>
@@ -1000,18 +1010,18 @@ export default function DailyBoardPage() {
                                           staff_name: e.target.value,
                                         })
                                       }
-                                      className="w-full px-2 py-1 bg-white border border-blue-400 rounded-md text-xs font-semibold focus:outline-hidden"
+                                      className="w-full px-2 py-1 bg-white dark:bg-slate-800 border border-blue-400 dark:border-blue-500 rounded-md text-xs font-semibold text-slate-800 dark:text-slate-100 focus:outline-hidden"
                                     >
-                                      <option value="">-- เลือกพนักงาน --</option>
+                                      <option value="" className="dark:bg-slate-800">{t('board.selectStaff')}</option>
                                       {employeesList.map((emp) => (
-                                        <option key={emp.id} value={emp.full_name}>
+                                        <option key={emp.id} value={emp.full_name} className="dark:bg-slate-800">
                                           {formatEmployeeLabel(emp)}
                                         </option>
                                       ))}
                                     </select>
                                   </td>
 
-                                  <td className="p-2 border-r border-slate-300 w-44 text-center">
+                                  <td className="p-2 border-r border-slate-300 dark:border-slate-700 w-44 text-center">
                                     <input
                                       type="number"
                                       min="0"
@@ -1026,11 +1036,11 @@ export default function DailyBoardPage() {
                                               : Number(e.target.value),
                                         })
                                       }
-                                      className="w-24 px-2 py-1 bg-white border border-blue-400 rounded-md text-xs text-center font-mono font-bold focus:outline-hidden mx-auto block disabled:bg-slate-200"
+                                      className="w-24 px-2 py-1 bg-white dark:bg-slate-800 border border-blue-400 dark:border-blue-500 rounded-md text-xs text-center font-mono font-bold text-slate-800 dark:text-slate-100 focus:outline-hidden mx-auto block disabled:bg-slate-200 dark:disabled:bg-slate-900 disabled:text-slate-400 dark:disabled:text-slate-600"
                                     />
                                   </td>
 
-                                  <td className="p-2 border-r border-slate-300 w-36 text-center">
+                                  <td className="p-2 border-r border-slate-300 dark:border-slate-700 w-36 text-center">
                                     <label className="inline-flex items-center gap-1 cursor-pointer">
                                       <input
                                         type="checkbox"
@@ -1041,10 +1051,10 @@ export default function DailyBoardPage() {
                                             has_kpi: e.target.checked,
                                           })
                                         }
-                                        className="w-3.5 h-3.5 text-blue-600 rounded-xs"
+                                        className="w-3.5 h-3.5 text-blue-600 dark:text-blue-500 rounded-xs"
                                       />
-                                      <span className="text-[11px] text-slate-700 font-semibold">
-                                        มี KPI
+                                      <span className="text-[11px] text-slate-700 dark:text-slate-300 font-semibold">
+                                        {t('board.hasKpi')}
                                       </span>
                                     </label>
                                   </td>
@@ -1055,15 +1065,15 @@ export default function DailyBoardPage() {
                                         onClick={() =>
                                           staff.id && handleSaveEdit(staff.id)
                                         }
-                                        className="p-1 text-emerald-700 hover:bg-emerald-100 rounded-md transition-colors"
-                                        title="บันทึก"
+                                        className="p-1 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-950/60 rounded-md transition-colors"
+                                        title={t('common.save')}
                                       >
                                         <Check className="w-4 h-4" />
                                       </button>
                                       <button
                                         onClick={handleCancelEdit}
-                                        className="p-1 text-slate-500 hover:bg-slate-200 rounded-md transition-colors"
-                                        title="ยกเลิก"
+                                        className="p-1 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-md transition-colors"
+                                        title={t('common.cancel')}
                                       >
                                         <X className="w-4 h-4" />
                                       </button>
@@ -1073,14 +1083,14 @@ export default function DailyBoardPage() {
                               ) : (
                                 <tr
                                   key={staff.id || sIdx}
-                                  className={`border-b border-slate-200 transition-colors ${
+                                  className={`border-b border-slate-200 dark:border-slate-800 transition-colors ${
                                     isSelected
-                                      ? 'bg-rose-50/80'
-                                      : 'hover:bg-slate-50/80'
+                                      ? 'bg-rose-50/80 dark:bg-rose-950/30'
+                                      : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/40'
                                   }`}
                                 >
                                   <td
-                                    className={`p-2.5 border-r border-slate-300 font-semibold text-slate-800 ${staffBg}`}
+                                    className={`p-2.5 border-r border-slate-300 dark:border-slate-700 font-semibold text-slate-800 dark:text-slate-200 ${staffBg}`}
                                   >
                                     <div className="flex items-center gap-2">
                                       {staff.id && (
@@ -1091,27 +1101,27 @@ export default function DailyBoardPage() {
                                             staff.id &&
                                             handleToggleSelectRecord(staff.id)
                                           }
-                                          className="w-3.5 h-3.5 text-rose-600 rounded-xs cursor-pointer"
+                                          className="w-3.5 h-3.5 text-rose-600 dark:text-rose-500 rounded-xs cursor-pointer"
                                         />
                                       )}
                                       <span>{getDisplayStaffName(staff.staff_name)}</span>
                                     </div>
                                   </td>
-                                  <td className="p-2.5 border-r border-slate-300 font-mono font-bold text-center w-44">
+                                  <td className="p-2.5 border-r border-slate-300 dark:border-slate-700 font-mono font-bold text-center text-slate-800 dark:text-slate-200 w-44">
                                     {staff.has_kpi ? `${staff.kpi_achieved} / ${staff.kpi_target}` : '-'}
                                   </td>
-                                  <td className="p-2.5 border-r border-slate-300 text-center w-36 font-bold">
+                                  <td className="p-2.5 border-r border-slate-300 dark:border-slate-700 text-center w-36 font-bold">
                                     {!staff.has_kpi ? (
-                                      <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded-xs text-[11px]">
+                                      <span className="bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-xs text-[11px]">
                                         NO KPI
                                       </span>
                                     ) : isStaffPassed ? (
-                                      <span className="bg-emerald-600 text-white px-2 py-0.5 rounded-xs text-[11px]">
-                                        ผ่าน
+                                      <span className="bg-emerald-600 dark:bg-emerald-600 text-white px-2 py-0.5 rounded-xs text-[11px]">
+                                        {t('board.pass')}
                                       </span>
                                     ) : (
-                                      <span className="bg-red-600 text-white px-2 py-0.5 rounded-xs text-[11px]">
-                                        ไม่ผ่าน
+                                      <span className="bg-red-600 dark:bg-rose-700 text-white px-2 py-0.5 rounded-xs text-[11px]">
+                                        {t('board.notPass')}
                                       </span>
                                     )}
                                   </td>
@@ -1119,8 +1129,8 @@ export default function DailyBoardPage() {
                                     <div className="flex items-center justify-center gap-1">
                                       <button
                                         onClick={() => handleStartEdit(staff)}
-                                        className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                                        title="แก้ไข"
+                                        className="p-1 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded-md transition-colors"
+                                        title={t('common.edit')}
                                       >
                                         <Edit2 className="w-3.5 h-3.5" />
                                       </button>
@@ -1128,8 +1138,8 @@ export default function DailyBoardPage() {
                                         onClick={() =>
                                           handleDeleteRecord(staff.id)
                                         }
-                                        className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
-                                        title="ลบ"
+                                        className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-md transition-colors"
+                                        title={t('common.delete')}
                                       >
                                         <Trash2 className="w-3.5 h-3.5" />
                                       </button>
@@ -1139,27 +1149,28 @@ export default function DailyBoardPage() {
                               )
                             })}
 
-                            <tr className="bg-slate-200/90 font-bold border-t border-slate-400">
-                              <td className="p-2.5 border-r border-slate-300 text-slate-800">
+                            {/* Total Row */}
+                            <tr className="bg-slate-200/90 dark:bg-slate-800/90 font-bold border-t border-slate-400 dark:border-slate-700">
+                              <td className="p-2.5 border-r border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200">
                                 Total
                               </td>
                               <td
-                                className={`p-2.5 border-r border-slate-300 text-center font-mono ${
+                                className={`p-2.5 border-r border-slate-300 dark:border-slate-700 text-center font-mono ${
                                   !isDayPassed
-                                    ? 'bg-red-600 text-white'
-                                    : 'bg-emerald-600 text-white'
+                                    ? 'bg-red-600 dark:bg-rose-700 text-white'
+                                    : 'bg-emerald-600 dark:bg-emerald-600 text-white'
                                 }`}
                               >
                                 {totalKpiAchieved}
                               </td>
                               <td
-                                className={`p-2.5 border-r border-slate-300 text-center ${
+                                className={`p-2.5 border-r border-slate-300 dark:border-slate-700 text-center ${
                                   isDayPassed
-                                    ? 'bg-emerald-600 text-white'
-                                    : 'bg-red-600 text-white'
+                                    ? 'bg-emerald-600 dark:bg-emerald-600 text-white'
+                                    : 'bg-red-600 dark:bg-rose-700 text-white'
                                 }`}
                               >
-                                {isDayPassed ? 'ผ่าน' : 'ไม่ผ่าน'}
+                                {isDayPassed ? t('board.pass') : t('board.notPass')}
                               </td>
                               <td className="p-2.5"></td>
                             </tr>
@@ -1175,58 +1186,63 @@ export default function DailyBoardPage() {
         </div>
       </div>
 
+      {/* Export Modal */}
       {isExportModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-lg w-full p-6 space-y-5">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+        <div className="fixed inset-0 bg-slate-950/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-center justify-center z-50 p-4 transition-opacity">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl max-w-lg w-full p-6 space-y-5 transition-colors">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-3">
               <div>
-                <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                  <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
-                  การจัดกลุ่มทีมและส่งออก Excel แยก Sheet ({formatDateLabel(exportDate)})
+                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  <FileSpreadsheet className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                  {t('board.exportTitle', { date: formatDateLabel(exportDate) })}
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  กำหนดทีมพนักงานเพื่อสร้างไฟล์ Excel แยกตามรายชื่อทีมและดึง U ID ลูกค้าที่ตรงกัน
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  {t('board.exportDesc')}
                 </p>
               </div>
               <button
                 onClick={() => setIsExportModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg transition-colors"
+                aria-label={t('modal.close')}
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
+            {/* Modal Body */}
             <div className="space-y-4 text-xs">
-              <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-200/80">
-                <label className="font-bold text-slate-700 flex items-center gap-1.5">
-                  <Users className="w-4 h-4 text-blue-600" />
-                  จำนวนทีมทั้งหมด:
+              <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-200/80 dark:border-slate-700/60 transition-colors">
+                <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  {t('board.teamCount')}
                 </label>
                 <div className="flex items-center gap-2">
                   <select
                     value={teamCount}
                     onChange={(e) => handleTeamCountChange(Number(e.target.value))}
-                    className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-semibold text-slate-800 outline-none"
+                    className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-semibold text-slate-800 dark:text-slate-100 outline-none transition-colors"
                   >
                     {[1, 2, 3, 4, 5].map((num) => (
-                      <option key={num} value={num}>
-                        {num} ทีม
+                      <option key={num} value={num} className="dark:bg-slate-800">
+                        {t('board.teamsN', { n: num })}
                       </option>
                     ))}
                   </select>
                   <button
                     type="button"
                     onClick={handleAutoDistributeTeams}
-                    className="px-2.5 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 rounded-lg font-semibold transition-colors text-[11px]"
+                    className="px-2.5 py-1.5 bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/60 rounded-lg font-semibold transition-colors text-[11px]"
                   >
-                    แบ่งทีมเท่าๆ กัน
+                    {t('board.autoDistribute')}
                   </button>
                 </div>
               </div>
 
+              {/* Team Assignment List */}
               <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
-                <p className="font-bold text-slate-700 sticky top-0 bg-white py-1">
-                  กำหนดทีมของพนักงาน ({records.filter((r) => r.record_date === exportDate).length} คน)
+                <p className="font-bold text-slate-700 dark:text-slate-300 sticky top-0 bg-white dark:bg-slate-900 py-1 transition-colors">
+                  {t('board.assignTeams', { n: records.filter((r) => r.record_date === exportDate).length })}
                 </p>
 
                 {records
@@ -1240,28 +1256,28 @@ export default function DailyBoardPage() {
                     return (
                       <div
                         key={rec.id || rec.staff_name}
-                        className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-100 hover:bg-slate-100/70 transition-colors"
+                        className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-100/70 dark:hover:bg-slate-800 transition-colors"
                       >
                         <div>
-                          <p className="font-semibold text-slate-800">{label}</p>
-                          <p className="text-[11px] text-slate-400 font-mono">
+                          <p className="font-semibold text-slate-800 dark:text-slate-200">{label}</p>
+                          <p className="text-[11px] text-slate-400 dark:text-slate-500 font-mono">
                             User: {emp?.user_number || '-'} | KPI: {rec.kpi_achieved}/{rec.kpi_target}
                           </p>
                         </div>
 
                         <select
-                          value={teamAssignments[rec.staff_name] || 'ทีม 1'}
+                          value={teamAssignments[rec.staff_name] || '1'}
                           onChange={(e) =>
                             setTeamAssignments({
                               ...teamAssignments,
                               [rec.staff_name]: e.target.value,
                             })
                           }
-                          className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
+                          className="px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400 outline-none transition-colors"
                         >
                           {Array.from({ length: teamCount }).map((_, i) => (
-                            <option key={i + 1} value={`ทีม ${i + 1}`}>
-                              ทีม {i + 1}
+                            <option key={i + 1} value={String(i + 1)} className="dark:bg-slate-800">
+                              {t('board.team', { n: i + 1 })}
                             </option>
                           ))}
                         </select>
@@ -1270,21 +1286,22 @@ export default function DailyBoardPage() {
                   })}
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+              {/* Modal Actions */}
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setIsExportModalOpen(false)}
-                  className="px-4 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl font-semibold transition-colors"
+                  className="px-4 py-2 text-slate-600 dark:text-slate-300 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-xl font-semibold transition-colors"
                 >
-                  ยกเลิก
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="button"
                   onClick={handleDownloadExcelReport}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white rounded-xl font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
                 >
                   <Download className="w-4 h-4" />
-                  ดาวน์โหลดไฟล์ Excel (.xlsx)
+                  {t('board.downloadXlsx')}
                 </button>
               </div>
             </div>
@@ -1292,6 +1309,7 @@ export default function DailyBoardPage() {
         </div>
       )}
 
+      {/* Reconcile Modal Component */}
       <DailyBoardReconcileModal
         isOpen={isReconcileModalOpen}
         selectedDate={selectedDate}

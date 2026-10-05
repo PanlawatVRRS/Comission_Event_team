@@ -1,8 +1,18 @@
 @import "tailwindcss";
 
+/* 1. บอก Tailwind v4 ให้เปิดใช้งาน dark: เมื่อมี class .dark อยู่ที่แท็ก <html> */
+@variant dark (&:where(.dark, .dark *));
+
+/* 2. ค่าเริ่มต้น (Light Mode) */
 :root {
   --background: #ffffff;
   --foreground: #171717;
+}
+
+/* 3. สลับเปลี่ยนค่า CSS Variables เมื่อมี class .dark (ผ่านการสลับด้วย Navbar) */
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
 }
 
 @theme inline {
@@ -10,13 +20,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
